@@ -1,0 +1,63 @@
+name: video
+# Cut's cloud fetcher, in the private KezLahd/cut-fetcher repo at .github/workflows/video.yml.
+# Downloads a public post's video with yt-dlp, logged out: no cookies, no account, never signed in.
+# The video comes back as one artifact named "out", which Cut downloads and then deletes the run.
+run-name: ${{ inputs.id }}
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: Public post link
+        required: true
+      id:
+        description: Cut request id, used to find this run
+        required: true
+permissions:
+  contents: read
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Install yt-dlp
+        run: |
+          curl -sfL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux -o yt-dlp
+          chmod +x yt-dlp
+      - name: Fetch video (logged out)
+        env:
+          URL: ${{ inputs.url }}
+        run: |
+          mkdir out
+          set +e
+          # Up to 1080p. Video only is fine (stills don't need sound). H.264 or HEVC first: an iPhone can't open
+          # VP9 in an MP4, which is what Instagram often serves ("Cannot Open" in Cut).
+          ./yt-dlp --no-playlist --no-progress --no-warnings --ignore-config \
+            --no-cookies --no-cookies-from-browser \
+            -f 'bv*[height<=1080][vcodec^=avc1]/bv*[height<=1080][vcodec^=hvc1]/bv*[height<=1080][vcodec^=hev1]/b[height<=1080][vcodec^=avc1]/bv*[height<=1080]/b' \
+            --remux-video mp4 \
+            -o 'out/source.%(ext)s' --write-info-json -- "$URL" 2> out/error.txt
+          status=$?
+          # Anything an iPhone can't decode (Instagram often offers only VP9) is re-encoded to H.264. The runner has no
+          # ffmpeg, so it's installed from Ubuntu's own packages, only when a video needs it.
+          f=$(ls out/source.* 2>/dev/null | grep -v '\.json$' | head -1)
+          codec=$(jq -r '.vcodec // ""' out/source.info.json 2>/dev/null)
+          echo "Fetched $f as ${codec:-unknown}"
+          if [ -n "$f" ]; then
+            case "$codec" in
+              avc*|h264*|hvc*|hev*|h265*) ;;
+              *)
+                sudo apt-get update -qq >/dev/null && sudo apt-get install -y -qq ffmpeg >/dev/null
+                ffmpeg -loglevel error -y -i "$f" -an -c:v libx264 -preset veryfast -crf 21 -pix_fmt yuv420p out/h264.mp4 \
+                  && rm "$f" && mv out/h264.mp4 out/source.mp4 && echo "Re-encoded to H.264" ;;
+            esac
+          fi
+          set -e
+          ls -la out
+          exit 0
+      - name: Hand back
+        uses: actions/upload-artifact@v4
+        with:
+          name: out
+          path: out/
+          retention-days: 1
+          compression-level: 0

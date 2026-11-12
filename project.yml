@@ -1,0 +1,174 @@
+# Cut: video in, the stills that matter out, sent to Claude.
+# Generate the Xcode project with `xcodegen` (brew install xcodegen). No third-party Swift packages.
+name: Cut
+options:
+  bundleIdPrefix: com.kezlahd
+  deploymentTarget:
+    iOS: "26.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    DEVELOPMENT_TEAM: 8QPPD49JQ5
+    CODE_SIGN_STYLE: Automatic
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    TARGETED_DEVICE_FAMILY: "1"
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+targets:
+  Cut:
+    type: application
+    platform: iOS
+    sources:
+      - App
+      - Shared
+      - Resources
+      # The share screen, so a debug launch can show it (CUT_SHEET=share).
+      - Share/ShareScreen.swift
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleDisplayName: Cut
+        UILaunchScreen:
+          UIColorName: LaunchBackground
+        NSSupportsLiveActivities: true
+        # Every frame is a push to the Island; this raises how many iOS lets through.
+        NSSupportsLiveActivitiesFrequentUpdates: true
+        UIBackgroundModes: [audio]
+        UIAppFonts: [SchibstedGrotesk.ttf, JetBrainsMono.ttf]
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
+        # Full screen tells App Store validation it doesn't do iPad multitasking.
+        UIRequiresFullScreen: true
+        ITSAppUsesNonExemptEncryption: false
+        CFBundleURLTypes:
+          - CFBundleURLSchemes: [cut]
+    entitlements:
+      path: App/Cut.entitlements
+      properties:
+        # The Island's Live Activity takes push updates from the broadcast extension.
+        aps-environment: development
+        com.apple.security.application-groups: [group.com.kezlahd.cut]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.kezlahd.cut
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    dependencies:
+      - target: CutShare
+      - target: CutBroadcast
+      - target: CutWidgets
+
+  CutShare:
+    type: app-extension
+    platform: iOS
+    sources:
+      - Share
+      - Shared/AppGroup.swift
+      - Shared/Models.swift
+      - Shared/Token.swift
+      - Shared/CloudDispatch.swift
+      - Shared/Brand.swift
+      - App/Theme.swift
+      - App/PullBrackets.swift
+      - Resources/Fonts
+    info:
+      path: Share/Info.plist
+      properties:
+        UIAppFonts: [SchibstedGrotesk.ttf, JetBrainsMono.ttf]
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        ITSAppUsesNonExemptEncryption: false
+        CFBundleDisplayName: Cut
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.share-services
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
+          NSExtensionAttributes:
+            NSExtensionActivationRule:
+              NSExtensionActivationSupportsMovieWithMaxCount: 1
+              NSExtensionActivationSupportsWebURLWithMaxCount: 1
+              NSExtensionActivationSupportsText: true
+    entitlements:
+      path: Share/CutShare.entitlements
+      properties:
+        com.apple.security.application-groups: [group.com.kezlahd.cut]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.kezlahd.cut.share
+
+  CutBroadcast:
+    type: app-extension
+    platform: iOS
+    sources:
+      - Broadcast
+      - Shared/AppGroup.swift
+      - Shared/Darwin.swift
+      - Shared/FrameDiff.swift
+      - Shared/TourState.swift
+    info:
+      path: Broadcast/Info.plist
+      properties:
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        ITSAppUsesNonExemptEncryption: false
+        CFBundleDisplayName: Cut
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.broadcast-services-upload
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).SampleHandler
+          RPBroadcastProcessMode: RPBroadcastProcessModeSampleBuffer
+    entitlements:
+      path: Broadcast/CutBroadcast.entitlements
+      properties:
+        com.apple.security.application-groups: [group.com.kezlahd.cut]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.kezlahd.cut.broadcast
+
+  CutWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - Widgets
+      - Shared/AppGroup.swift
+      - Shared/Darwin.swift
+      - Shared/TourActivity.swift
+      - Shared/TourState.swift
+      - Shared/StopTour.swift
+      - Shared/Brand.swift
+    info:
+      path: Widgets/Info.plist
+      properties:
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        ITSAppUsesNonExemptEncryption: false
+        CFBundleDisplayName: Cut
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    entitlements:
+      path: Widgets/CutWidgets.entitlements
+      properties:
+        com.apple.security.application-groups: [group.com.kezlahd.cut]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.kezlahd.cut.widgets
+  CutUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [UITests]
+    dependencies:
+      - target: Cut
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.kezlahd.cut.uitests
+schemes:
+  Cut:
+    build:
+      targets:
+        Cut: all
+    run:
+      config: Debug
+    test:
+      targets: [CutUITests]
+    archive:
+      config: Release
